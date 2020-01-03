@@ -1,6 +1,8 @@
 package duck
 
-import "context"
+import (
+	"context"
+)
 
 // Server 服务
 type Server interface {
@@ -34,4 +36,5 @@ type Client interface {
 type Message struct {
 	Data    []byte
 	Context context.Context
+	Err     error
 }

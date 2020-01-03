@@ -3,31 +3,30 @@ package duck
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"github.com/google/uuid"
 	"net"
 	"sync"
 )
 
 // _Server_ ...
 type _Server_ struct {
-	Config                  *_Config_                                    // 服务配置
-	IsRun                   bool                                         // 服务是否运行标识
-	Lis                     net.Listener                                 // 服务监听
-	LisMux                  sync.Mutex                                   // 服务监听锁
-	Clients                 *sync.Map                                    // 客户端连接
-	Messages                chan *Message                                // 消息
-	EncodeMessageCallback   func(buffer *bytes.Buffer, message *Message) // 消息编码
-	DecodeMessageCallback   func(buffer *bytes.Buffer) []*Message        // 消息解码
-	ServerRunCallbacks      []ServerRunCallback                          // 服务运行回调
-	ServerStopCallbacks     []ServerStopCallback                         // 服务停止回调
-	ClientConnCallbacks     []ClientConnCallback                         // 客户端建立连接回调
-	ClientUnConnCallbacks   []ClientUnConnCallback                       // 客户端断开连接回调
-	ClientRequestCallbacks  []ClientRequestCallback                      // 客户端请求回调
-	ClientResponseCallbacks []ClientResponseCallback                     // 客户端响应回调
-}
+	Conf   *_Config_    // 服务配置
+	IsRun  bool         // 服务是否运行标识
+	Lis    net.Listener // 服务监听
+	LisMux sync.Mutex   // 服务监听锁
 
-var _ErrServerIsRun_ = errors.New("the service is running") // 服务已经运行
+	Clients         *sync.Map     // 客户端连接
+	RequestMessages chan *Message // 消息
+
+	EncodeMessageCallback func(buffer *bytes.Buffer, message *Message) // 消息编码
+	DecodeMessageCallback func(buffer *bytes.Buffer) []*Message        // 消息解码
+
+	ServerRunCallbacks    []ServerRunCallback      // 服务运行回调
+	ServerStopCallbacks   []ServerStopCallback     // 服务停止回调
+	ClientConnCallbacks   []ClientConnCallback     // 客户端建立连接回调
+	ClientUnConnCallbacks []ClientUnConnCallback   // 客户端断开连接回调
+	ClientReqCallbacks    []ClientRequestCallback  // 客户端请求回调
+	ClientRpsCallbacks    []ClientResponseCallback // 客户端响应回调
+}
 
 // Run 启动服务
 func (s *_Server_) Run() error {
@@ -35,33 +34,30 @@ func (s *_Server_) Run() error {
 	defer s.LisMux.Unlock()
 
 	if s.IsRun {
-		return _ErrServerIsRun_
+		return errors.New("the service is running")
 	}
 
-	if lis, err := net.Listen("tcp", s.Config.Addr); err == nil {
+	if lis, err := net.Listen("tcp", s.Conf.Addr); err == nil {
 		s.Lis = lis
 		s.IsRun = true
 		for _, callback := range s.ServerRunCallbacks {
 			callback()
 		}
-		go s.run()
+		go s.listener()
 	} else {
 		return err
 	}
 	return nil
 }
 
-func (s *_Server_) run() {
+func (s *_Server_) listener() {
+	s.RequestMessages = make(chan *Message, 65535)
 	for s.IsRun {
 		conn, _ := s.Lis.Accept()
 
 		go func() {
-			client := new(_Client_)
-			client.Conn = conn
-			client.Server = s
-			client.ID = uuid.New().String()
+			client := newClient(conn, s)
 			allowClient := true
-
 			for _, callback := range s.ClientConnCallbacks {
 				next, allow := callback(client)
 				if !allow {
@@ -74,16 +70,13 @@ func (s *_Server_) run() {
 
 			if allowClient {
 				s.Clients.Store(client.ID, client)
-				go func() {
-
-				}()
+				client.Run()
 			} else {
-				if err := conn.Close(); err != nil {
-					fmt.Println(err)
-				}
+				client.Stop()
 			}
 		}()
 	}
+	close(s.RequestMessages)
 }
 
 // Stop 停止服务
@@ -101,7 +94,7 @@ func (s *_Server_) Stop(signal int) error {
 
 	s.Clients.Range(func(key, value interface{}) bool {
 		s.Clients.Delete(key)
-		value.(*_Client_).Conn.Close()
+		value.(*_Client_).Stop()
 		return true
 	})
 
