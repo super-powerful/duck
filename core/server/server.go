@@ -50,7 +50,7 @@ type EncodeEvent func(core.ServerClient, *_Message_) []byte
 type DecodeEvent func(core.ServerClient, []byte) (int, *_Message_)
 type MessageEvent func(*_Message_)
 type ClientConnFilterEvent func(core.ServerClient) bool
-type ClientDisConnEvent func(string)
+type ClientDisConnEvent func(core.ServerClient)
 
 type _Event_ struct {
 	EncodeEvent           EncodeEvent
@@ -67,6 +67,16 @@ type _Server_ struct {
 	Mux     sync.Mutex
 	Clients sync.Map
 	_Event_
+}
+
+type Options func(s *_Server_)
+
+func NewServer(options ...Options) core.Server {
+	s := new(_Server_)
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 func (s *_Server_) Run() error {
@@ -159,16 +169,27 @@ func (c *_ServerClient_) GetID() string {
 }
 
 func (c *_ServerClient_) Close() error {
+	c.Mux.Lock()
+	defer c.Mux.Unlock()
 
-}
+	if c.IsRun {
+		c.IsRun = false
+		if err := c.Conn.Close(); err != nil {
+			fmt.Println(err)
+		}
+		c.Server.Clients.Delete(c.GetID())
+		if c.Server.ClientDisConnEvent != nil {
+			c.Server.ClientDisConnEvent(c)
+		}
+	}
 
-func (c *_ServerClient_) SendMsg(message *_Message_) <-chan error {
-	panic("implement me")
+	return nil
 }
 
 func (c *_ServerClient_) todo() {
 	c.Mux.Lock()
 	defer c.Mux.Unlock()
+	c.IsRun = true
 	go c.reader()
 	go c.writer()
 }
@@ -181,12 +202,17 @@ func (c *_ServerClient_) reader() {
 	data := make([]byte, 1024)
 	for c.IsRun {
 		if size, err := c.Conn.Read(data); err == nil {
+			if c.Server.DecodeEvent == nil {
+				continue
+			}
 			dataBuff.Write(data[:size])
 			useSize := 0
 			for {
 				if len, message := c.Server.DecodeEvent(c, dataBuff.Bytes()); len != 0 {
 					useSize += len
-					go c.Server.MessageEvent(message)
+					if c.Server.MessageEvent != nil {
+						go c.Server.MessageEvent(message)
+					}
 				} else {
 					break
 				}
@@ -208,9 +234,13 @@ func (c *_ServerClient_) writer() {
 	for c.IsRun {
 		if message, ok := <-c.WriterBytes; ok {
 			if data := c.Server.EncodeEvent(c, message); data != nil {
-				c.Conn.Write()
+				if _, err := c.Conn.Write(data); err != nil {
+					message.done(err)
+					break
+				} else {
+					message.done(nil)
+				}
 			}
-			message.Context.Done()
 		} else {
 			break
 		}
