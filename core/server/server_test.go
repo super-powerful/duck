@@ -7,17 +7,13 @@ import (
 	"time"
 )
 
-func init() {
-	server := NewServer(Addr(":8080"))
-	if err := server.Run(); err != nil {
-		fmt.Println(err)
-	}
-	time.Sleep(time.Second)
-}
-
 func TestNewServer(t *testing.T) {
-	conn, _ := net.Dial("tcp", "127.0.0.1:8080")
-	conn.Close()
-	wait := make(chan struct{})
-	<-wait
+	beginTime := time.Now()
+	for i := 0; i < 1000; i++ {
+		if _, err := net.Dial("tcp", "127.0.0.1:8080"); err != nil {
+			t.Log(err)
+		}
+	}
+	overTime := time.Now()
+	fmt.Printf("一万连接建立完成使用了%v纳秒", overTime.Sub(beginTime).Nanoseconds())
 }
