@@ -8,7 +8,6 @@ import (
 type Server interface {
 	Run() error
 	Stop(signal int) error
-	SendMessage(client Client, message *Message) error
 }
 
 // ServerRunCallback 服务启动回调
@@ -31,6 +30,7 @@ type ClientResponseCallback func(client Client, message *Message)
 
 type Client interface {
 	GetID() string
+	SendMessage(message *Message) error
 }
 
 type Message struct {

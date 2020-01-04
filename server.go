@@ -9,12 +9,12 @@ import (
 
 // _Server_ ...
 type _Server_ struct {
-	Conf   *_Config_    // 服务配置
+	Conf   _Config_     // 服务配置
 	IsRun  bool         // 服务是否运行标识
 	Lis    net.Listener // 服务监听
 	LisMux sync.Mutex   // 服务监听锁
 
-	Clients         *sync.Map     // 客户端连接
+	Clients         sync.Map      // 客户端连接
 	RequestMessages chan *Message // 消息
 
 	EncodeMessageCallback func(buffer *bytes.Buffer, message *Message) // 消息编码
@@ -114,6 +114,12 @@ type _Option_ func(s *_Server_)
 
 // New 创建服务
 func New(options ..._Option_) Server {
+	server := new(_Server_)
+	DefaultEncoding(server)
+	DefaultDecoding(server)
 
-	return nil
+	for _, option := range options {
+		option(server)
+	}
+	return server
 }
