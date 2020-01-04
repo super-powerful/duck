@@ -115,11 +115,20 @@ type _Option_ func(s *_Server_)
 // New 创建服务
 func New(options ..._Option_) Server {
 	server := new(_Server_)
+
 	DefaultEncoding(server)
 	DefaultDecoding(server)
+
+	server.ServerRunCallbacks = make([]ServerRunCallback, 0)
+	server.ServerStopCallbacks = make([]ServerStopCallback, 0)
+	server.ClientConnCallbacks = make([]ClientConnCallback, 0)
+	server.ClientUnConnCallbacks = make([]ClientUnConnCallback, 0)
+	server.ClientReqCallbacks = make([]ClientRequestCallback, 0)
+	server.ClientRpsCallbacks = make([]ClientResponseCallback, 0)
 
 	for _, option := range options {
 		option(server)
 	}
+
 	return server
 }
