@@ -71,6 +71,7 @@ func (c *_Client_) reader() {
 				for _, message := range messages {
 					c.Server.RequestMessages <- message
 				}
+				cacheData = bytes.NewBuffer(cacheData.Bytes())
 			}
 		} else {
 			break
