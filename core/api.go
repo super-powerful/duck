@@ -2,7 +2,7 @@ package core
 
 type Server interface {
 	Run() error
-	Stop(signal int) error
+	Stop() error
 	GetClient(ID string) ServerClient
 }
 

@@ -35,3 +35,4 @@ func ClientDisConn(clientDisConnEvent ClientDisConnEvent) Options {
 		s.ClientDisConnEvent = clientDisConnEvent
 	}
 }
+

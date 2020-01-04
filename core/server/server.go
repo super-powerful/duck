@@ -82,6 +82,7 @@ func NewServer(options ...Options) core.Server {
 func (s *_Server_) Run() error {
 	s.Mux.Lock()
 	defer s.Mux.Unlock()
+	fmt.Printf("server is starting...\n")
 
 	if s.RunFlag {
 		if err := s.stop(); err != nil {
@@ -101,32 +102,36 @@ func (s *_Server_) Run() error {
 	return nil
 }
 func (s *_Server_) run() error {
-
+	fmt.Printf("server are ready to receive requests!\n")
 	for s.RunFlag {
 		if conn, err := s.Lis.Accept(); err == nil {
-			client := newServerClient(s, conn)
-			if s.ClientConnFilterEvent != nil {
-				if s.ClientConnFilterEvent(client) {
-					s.Clients.Store(client.ID, client)
-					client.todo()
-				} else {
-					if err := client.Close(); err != nil {
-						fmt.Println(err)
+			go func() {
+				fmt.Printf("客户端进入:%v!\n", conn.RemoteAddr().String())
+				client := newServerClient(s, conn)
+				if s.ClientConnFilterEvent != nil {
+					if s.ClientConnFilterEvent(client) {
+						s.Clients.Store(client.ID, client)
+						client.todo()
+					} else {
+						if err := client.Close(); err != nil {
+							fmt.Println(err)
+						}
 					}
 				}
-			}
+			}()
 		}
 	}
 
 	return nil
 }
 
-func (s *_Server_) Stop(signal int) error {
+func (s *_Server_) Stop() error {
 	s.Mux.Lock()
 	defer s.Mux.Unlock()
 
 	if s.RunFlag {
 		s.stop()
+		fmt.Printf("server is stopped!")
 	}
 
 	return nil
@@ -138,7 +143,7 @@ func (s *_Server_) stop() error {
 		fmt.Println(err)
 	}
 	s.Clients.Range(func(key, value interface{}) bool {
-		if err := value.(_ServerClient_).Close(); err != nil {
+		if err := value.(*_ServerClient_).Close(); err != nil {
 			fmt.Println(err)
 		}
 		s.Clients.Delete(key)
@@ -173,6 +178,7 @@ func (c *_ServerClient_) Close() error {
 	defer c.Mux.Unlock()
 
 	if c.IsRun {
+		fmt.Printf("客户端离开:%v!\n", c.Conn.RemoteAddr().String())
 		c.IsRun = false
 		if err := c.Conn.Close(); err != nil {
 			fmt.Println(err)
