@@ -117,6 +117,9 @@ func (s *_Server_) run() error {
 							fmt.Println(err)
 						}
 					}
+				} else {
+					s.Clients.Store(client.ID, client)
+					client.todo()
 				}
 			}()
 		}
