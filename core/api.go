@@ -1,5 +1,16 @@
 package core
 
+type Message interface {
+	GetData() interface{}
+	Done() <-chan struct{}
+	Error() error
+}
+
+type Client interface {
+	Close() error
+	SendMessage(data interface{}) ServerMessage
+}
+
 type Server interface {
 	Run() error
 	Stop() error
@@ -9,20 +20,16 @@ type Server interface {
 }
 
 type ServerClient interface {
+	Client
 	GetID() string
-	Close() error
-	SendMessage(data interface{}) ServerMessage
 }
 
 type ServerMessage interface {
+	Message
 	GetClient() ServerClient
-	GetData() interface{}
-	Done() <-chan struct{}
-	Error() error
 }
 
-type Client interface {
+type UserClient interface {
+	Client
 	Dial() error
-	ReDial() error
-	Close() error
 }

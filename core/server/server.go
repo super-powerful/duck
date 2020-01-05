@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/super-powerful/duck/core"
@@ -48,9 +49,9 @@ func NewMessage(client core.ServerClient, data interface{}) core.ServerMessage {
 	}
 }
 
-type EncodeEvent func(core.ServerClient, *_Message_) []byte
-type DecodeEvent func(core.ServerClient, []byte) (int, *_Message_)
-type MessageEvent func(*_Message_)
+type EncodeEvent func(core.ServerClient, core.Message) []byte
+type DecodeEvent func(core.ServerClient, []byte) (int, core.Message)
+type MessageEvent func(core.Message)
 type ClientConnFilterEvent func(core.ServerClient) bool
 type ClientDisConnEvent func(core.ServerClient)
 
@@ -65,7 +66,7 @@ type _Event_ struct {
 type _Server_ struct {
 	Addr    string
 	Lis     net.Listener
-	RunFlag bool
+	IsRun   bool
 	Mux     sync.Mutex
 	Clients sync.Map
 	_Event_
@@ -86,7 +87,7 @@ func (s *_Server_) Run() error {
 	defer s.Mux.Unlock()
 	log.Printf("服务启动中...\n")
 
-	if s.RunFlag {
+	if s.IsRun {
 		if err := s.stop(); err != nil {
 			return err
 		}
@@ -94,7 +95,7 @@ func (s *_Server_) Run() error {
 
 	if lis, err := net.Listen("tcp", s.Addr); err == nil {
 		s.Lis = lis
-		s.RunFlag = true
+		s.IsRun = true
 
 		go s.run()
 	} else {
@@ -105,7 +106,7 @@ func (s *_Server_) Run() error {
 }
 func (s *_Server_) run() error {
 	log.Printf("服务已启动,监听%s正在等待连接进入!\n", s.Lis.Addr().String())
-	for s.RunFlag {
+	for s.IsRun {
 		if conn, err := s.Lis.Accept(); err == nil {
 			go func() {
 				client := newServerClient(s, conn)
@@ -134,7 +135,7 @@ func (s *_Server_) Stop() error {
 	s.Mux.Lock()
 	defer s.Mux.Unlock()
 
-	if s.RunFlag {
+	if s.IsRun {
 		s.stop()
 		log.Printf("服务%v已经停止!\n", s.Lis.Addr().String())
 	}
@@ -143,7 +144,7 @@ func (s *_Server_) Stop() error {
 }
 
 func (s *_Server_) stop() error {
-	s.RunFlag = false
+	s.IsRun = false
 	if err := s.Lis.Close(); err != nil {
 		fmt.Println(err)
 	}
@@ -173,20 +174,19 @@ func (s *_Server_) GetClients(handle func(core.ServerClient)) {
 }
 func (s *_Server_) SendMessage(client core.ServerClient, data interface{}) core.ServerMessage {
 	message := NewMessage(client, data)
-	client.(*_ServerClient_).WriterMessage <- message.(*_Message_)
+	client.(*_ServerClient_).WriterMessages <- message.(*_Message_)
 	return message
 }
 
 type _ServerClient_ struct {
-	ID            string
-	Server        *_Server_
-	Conn          net.Conn
-	IsRun         bool
-	Mux           sync.Mutex
-	WriterMessage chan *_Message_
-
-	LastRead  time.Time
-	LastWrite time.Time
+	ID             string
+	Server         *_Server_
+	Conn           net.Conn
+	IsRun          bool
+	Mux            sync.Mutex
+	WriterMessages chan *_Message_
+	LastRead       time.Time
+	LastWrite      time.Time
 }
 
 func (c *_ServerClient_) GetID() string {
@@ -221,9 +221,6 @@ func (c *_ServerClient_) todo() {
 }
 
 func (c *_ServerClient_) reader() {
-	defer func() {
-		c.Close()
-	}()
 	dataBuff := new(bytes.Buffer)
 	data := make([]byte, 1024)
 	for c.IsRun {
@@ -252,14 +249,13 @@ func (c *_ServerClient_) reader() {
 			break
 		}
 	}
+	c.Close()
 }
 
 func (c *_ServerClient_) writer() {
-	defer func() {
-		c.Close()
-	}()
+	messages := c.WriterMessages
 	for c.IsRun {
-		if message, ok := <-c.WriterMessage; ok {
+		if message, ok := <-messages; ok {
 			if data := c.Server.EncodeEvent(c, message); data != nil {
 				if _, err := c.Conn.Write(data); err != nil {
 					message.done(err)
@@ -273,22 +269,30 @@ func (c *_ServerClient_) writer() {
 			break
 		}
 	}
+	c.Close()
+	for {
+		if message, ok := <-messages; ok {
+			message.done(errors.New("客户端断开连接"))
+		} else {
+			break
+		}
+	}
 }
 
 func (c *_ServerClient_) SendMessage(data interface{}) core.ServerMessage {
 	message := NewMessage(c, data)
-	c.WriterMessage <- message.(*_Message_)
+	c.WriterMessages <- message.(*_Message_)
 	return message
 }
 
 func newServerClient(server *_Server_, conn net.Conn) *_ServerClient_ {
 	return &_ServerClient_{
-		ID:            uuid.New().String(),
-		Server:        server,
-		Conn:          conn,
-		IsRun:         false,
-		WriterMessage: make(chan *_Message_, 512),
-		LastRead:      time.Now(),
-		LastWrite:     time.Now(),
+		ID:             uuid.New().String(),
+		Server:         server,
+		Conn:           conn,
+		IsRun:          false,
+		WriterMessages: make(chan *_Message_, 512),
+		LastRead:       time.Now(),
+		LastWrite:      time.Now(),
 	}
 }
