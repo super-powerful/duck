@@ -1,9 +1,9 @@
 # 开始使用
-### 依赖
+## 依赖
 ```
 go get github.com/super-powerful/duck
 ```
-### 例子
+## 例子
 ``` go
 package duck
 
