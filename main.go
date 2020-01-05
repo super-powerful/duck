@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	server.NewServer(server.Addr(":8080")).Run()
+	server.New(server.Addr(":8080")).Run()
 	wait := make(chan struct{})
 	<-wait
 }

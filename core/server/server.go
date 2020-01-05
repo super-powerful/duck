@@ -74,7 +74,7 @@ type _Server_ struct {
 
 type Options func(s core.Server)
 
-func NewServer(options ...Options) core.Server {
+func New(options ...Options) core.Server {
 	s := new(_Server_)
 	for _, option := range options {
 		option(s)

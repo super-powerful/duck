@@ -66,6 +66,16 @@ type _Client_ struct {
 	_Event_
 }
 
+type Options func(c core.UserClient)
+
+func New(options ...Options) core.UserClient {
+	s := new(_Client_)
+	for _, option := range options {
+		option(s)
+	}
+	return s
+}
+
 func (c *_Client_) Close() error {
 	c.Mux.Lock()
 	defer c.Mux.Unlock()
