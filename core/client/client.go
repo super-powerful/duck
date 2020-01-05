@@ -163,6 +163,7 @@ func (c *_Client_) reader() {
 			for {
 				if len, message := c.DecodeEvent(c, dataBuff.Bytes()); len != 0 {
 					useSize += len
+					dataBuff.Next(len)
 					if c.MessageEvent != nil && message != nil {
 						c.LastRead = time.Now()
 						go c.MessageEvent(message)
@@ -172,7 +173,6 @@ func (c *_Client_) reader() {
 				}
 			}
 			if useSize != 0 {
-				dataBuff.Next(useSize)
 				dataBuff = bytes.NewBuffer(dataBuff.Bytes())
 			}
 		} else {

@@ -19,23 +19,24 @@ func TestTcp(t *testing.T) {
 }
 
 func sendMsg(client core.UserClient) {
-	// 空字符
-	emptyDataTime := time.NewTicker(time.Second * 3)
-	// 日期字符
-	strDataTime := time.NewTicker(time.Second)
-	// 结束发送
-	endSend := time.After(time.Second * 15)
-	for {
-		select {
-		case <-emptyDataTime.C:
-			client.SendMessage(nil)
-		case currTime := <-strDataTime.C:
-			client.SendMessage(currTime.Format("2006-01-02 15:04:05"))
-		case <-endSend:
-			client.Close()
-			break
-		}
-	}
+	client.SendMessage(time.Now().Format("2006-01-02 15:04:05"))
+	//// 空字符
+	//emptyDataTime := time.NewTicker(time.Second * 3)
+	//// 日期字符
+	//strDataTime := time.NewTicker(time.Second * 1)
+	//// 结束发送
+	//endSend := time.After(time.Second * 2)
+	//for {
+	//	select {
+	//	case <-emptyDataTime.C:
+	//		client.SendMessage(nil)
+	//	case currTime := <-strDataTime.C:
+	//		client.SendMessage(currTime.Format("2006-01-02 15:04:05"))
+	//	case <-endSend:
+	//		client.Close()
+	//		break
+	//	}
+	//}
 }
 
 func initClient() core.UserClient {
