@@ -17,6 +17,8 @@ type _Message_ struct {
 	Data     interface{}
 	WaitChan chan struct{}
 	Err      error
+	IsOver   bool
+	Mux      sync.Mutex
 }
 
 func (m *_Message_) GetClient() core.ServerClient {
@@ -36,6 +38,12 @@ func (m *_Message_) Error() error {
 }
 
 func (m *_Message_) done(err error) {
+	m.Mux.Lock()
+	defer m.Mux.Unlock()
+	if m.IsOver {
+		return
+	}
+	m.IsOver = true
 	m.Err = err
 	close(m.WaitChan)
 }
@@ -49,11 +57,11 @@ func NewMessage(client core.ServerClient, data interface{}) core.Message {
 	}
 }
 
-type EncodeEvent func(core.ServerClient, core.Message) []byte
-type DecodeEvent func(core.ServerClient, []byte) (int, core.Message)
-type MessageEvent func(core.Message)
-type ClientConnFilterEvent func(core.ServerClient) bool
-type ClientDisConnEvent func(core.ServerClient)
+type EncodeEvent func(client core.ServerClient, message core.Message) []byte
+type DecodeEvent func(client core.ServerClient, data []byte) (int, core.Message)
+type MessageEvent func(message core.Message)
+type ClientConnFilterEvent func(client core.ServerClient) bool
+type ClientDisConnEvent func(client core.ServerClient)
 
 type _Event_ struct {
 	EncodeEvent           EncodeEvent
@@ -174,6 +182,11 @@ func (s *_Server_) GetClients(handle func(core.ServerClient)) {
 }
 func (s *_Server_) SendMessage(client core.ServerClient, data interface{}) core.Message {
 	message := NewMessage(client, data)
+	defer func() {
+		if err := recover(); err != nil {
+			message.(*_Message_).done(err.(error))
+		}
+	}()
 	client.(*_ServerClient_).WriterMessages <- message.(*_Message_)
 	return message
 }
@@ -191,6 +204,10 @@ type _ServerClient_ struct {
 
 func (c *_ServerClient_) GetID() string {
 	return c.ID
+}
+
+func (c *_ServerClient_) GetAddr() string {
+	return c.Conn.RemoteAddr().String()
 }
 
 func (c *_ServerClient_) Close() error {
@@ -281,6 +298,11 @@ func (c *_ServerClient_) writer() {
 
 func (c *_ServerClient_) SendMessage(data interface{}) core.Message {
 	message := NewMessage(c, data)
+	defer func() {
+		if err := recover(); err != nil {
+			message.(*_Message_).done(err.(error))
+		}
+	}()
 	c.WriterMessages <- message.(*_Message_)
 	return message
 }

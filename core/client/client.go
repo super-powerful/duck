@@ -13,7 +13,9 @@ import (
 type _Message_ struct {
 	Data     interface{}
 	WaitChan chan struct{}
+	IsOver   bool
 	Err      error
+	Mux      sync.Mutex
 }
 
 func (m *_Message_) GetData() interface{} {
@@ -29,6 +31,12 @@ func (m *_Message_) Error() error {
 }
 
 func (m *_Message_) done(err error) {
+	m.Mux.Lock()
+	defer m.Mux.Unlock()
+	if m.IsOver {
+		return
+	}
+	m.IsOver = true
 	m.Err = err
 	close(m.WaitChan)
 }
@@ -41,11 +49,11 @@ func NewMessage(data interface{}) core.Message {
 	}
 }
 
-type EncodeEvent func(core.UserClient, core.Message) []byte
-type DecodeEvent func(core.UserClient, []byte) (int, core.Message)
-type MessageEvent func(core.Message)
-type ConnEvent func(core.UserClient) bool
-type DisConnEvent func(core.UserClient)
+type EncodeEvent func(client core.UserClient, message core.Message) []byte
+type DecodeEvent func(client core.UserClient, data []byte) (int, core.Message)
+type MessageEvent func(message core.Message)
+type ConnEvent func(client core.UserClient) bool
+type DisConnEvent func(client core.UserClient)
 
 type _Event_ struct {
 	EncodeEvent  EncodeEvent
@@ -97,6 +105,11 @@ func (c *_Client_) close() error {
 }
 func (c *_Client_) SendMessage(data interface{}) core.Message {
 	message := NewMessage(data)
+	defer func() {
+		if err := recover(); err != nil {
+			message.(*_Message_).done(err.(error))
+		}
+	}()
 	c.WriteMessages <- message.(*_Message_)
 	return message
 }
@@ -111,12 +124,12 @@ func (c *_Client_) Dial() error {
 		}
 	}
 	if conn, err := net.Dial("tcp", c.Addr); err == nil {
-		log.Printf("建立%v成功!\n", c.Conn.RemoteAddr().String())
 		c.IsRun = true
 		c.Conn = conn
 		c.WriteMessages = make(chan *_Message_, 512)
 		c.LastRead = time.Now()
 		c.LastWrite = time.Now()
+		log.Printf("建立%v成功!\n", c.Conn.RemoteAddr().String())
 		if c.ConnEvent != nil {
 			if c.ConnEvent(c) {
 				go c.todo()

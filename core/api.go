@@ -22,6 +22,7 @@ type Server interface {
 type ServerClient interface {
 	Client
 	GetID() string
+	GetAddr() string
 }
 
 type ServerMessage interface {
