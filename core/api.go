@@ -8,7 +8,7 @@ type Message interface {
 
 type Client interface {
 	Close() error
-	SendMessage(data interface{}) ServerMessage
+	SendMessage(data interface{}) Message
 }
 
 type Server interface {
@@ -16,7 +16,7 @@ type Server interface {
 	Stop() error
 	GetClient(ID string) ServerClient
 	GetClients(func(handle ServerClient))
-	SendMessage(client ServerClient, data interface{}) ServerMessage
+	SendMessage(client ServerClient, data interface{}) Message
 }
 
 type ServerClient interface {

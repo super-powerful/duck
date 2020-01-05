@@ -40,7 +40,7 @@ func (m *_Message_) done(err error) {
 	close(m.WaitChan)
 }
 
-func NewMessage(client core.ServerClient, data interface{}) core.ServerMessage {
+func NewMessage(client core.ServerClient, data interface{}) core.Message {
 	return &_Message_{
 		Client:   client,
 		Data:     data,
@@ -72,7 +72,7 @@ type _Server_ struct {
 	_Event_
 }
 
-type Options func(s *_Server_)
+type Options func(s core.Server)
 
 func NewServer(options ...Options) core.Server {
 	s := new(_Server_)
@@ -172,7 +172,7 @@ func (s *_Server_) GetClients(handle func(core.ServerClient)) {
 		return true
 	})
 }
-func (s *_Server_) SendMessage(client core.ServerClient, data interface{}) core.ServerMessage {
+func (s *_Server_) SendMessage(client core.ServerClient, data interface{}) core.Message {
 	message := NewMessage(client, data)
 	client.(*_ServerClient_).WriterMessages <- message.(*_Message_)
 	return message
@@ -279,7 +279,7 @@ func (c *_ServerClient_) writer() {
 	}
 }
 
-func (c *_ServerClient_) SendMessage(data interface{}) core.ServerMessage {
+func (c *_ServerClient_) SendMessage(data interface{}) core.Message {
 	message := NewMessage(c, data)
 	c.WriterMessages <- message.(*_Message_)
 	return message

@@ -10,31 +10,31 @@ import (
 	"time"
 )
 
-type _UserMessage_ struct {
+type _Message_ struct {
 	Data     interface{}
 	WaitChan chan struct{}
 	Err      error
 }
 
-func (m *_UserMessage_) GetData() interface{} {
+func (m *_Message_) GetData() interface{} {
 	return m.Data
 }
 
-func (m *_UserMessage_) Done() <-chan struct{} {
+func (m *_Message_) Done() <-chan struct{} {
 	return m.WaitChan
 }
 
-func (m *_UserMessage_) Error() error {
+func (m *_Message_) Error() error {
 	return m.Err
 }
 
-func (m *_UserMessage_) done(err error) {
+func (m *_Message_) done(err error) {
 	m.Err = err
 	close(m.WaitChan)
 }
 
 func NewMessage(data interface{}) core.Message {
-	return &_UserMessage_{
+	return &_Message_{
 		Data:     data,
 		WaitChan: make(chan struct{}),
 		Err:      nil,
@@ -55,28 +55,43 @@ type _Event_ struct {
 	DisConnEvent DisConnEvent
 }
 
-type _UserClient_ struct {
+type _Client_ struct {
 	Addr          string
 	Conn          net.Conn
 	Mux           sync.Mutex
 	IsRun         bool
-	WriteMessages chan *_UserMessage_
+	WriteMessages chan *_Message_
 	LastRead      time.Time
 	LastWrite     time.Time
 	_Event_
 }
 
-func (c *_UserClient_) Close() error {
-	panic("implement me")
+func (c *_Client_) Close() error {
+	c.Mux.Lock()
+	defer c.Mux.Unlock()
+
+	if c.IsRun {
+		if err := c.close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
-func (c *_UserClient_) close() error {
-	panic("implement me")
+func (c *_Client_) close() error {
+	c.IsRun = false
+	close(c.WriteMessages)
+	if err := c.Conn.Close(); err != nil {
+		return err
+	}
+	return nil
 }
-func (c *_UserClient_) SendMessage(data interface{}) core.ServerMessage {
-	panic("implement me")
+func (c *_Client_) SendMessage(data interface{}) core.Message {
+	message := NewMessage(data)
+	c.WriteMessages <- message.(*_Message_)
+	return message
 }
 
-func (c *_UserClient_) Dial() error {
+func (c *_Client_) Dial() error {
 	c.Mux.Lock()
 	defer c.Mux.Unlock()
 
@@ -89,6 +104,9 @@ func (c *_UserClient_) Dial() error {
 		log.Printf("建立%v成功!\n", c.Conn.RemoteAddr().String())
 		c.IsRun = true
 		c.Conn = conn
+		c.WriteMessages = make(chan *_Message_, 512)
+		c.LastRead = time.Now()
+		c.LastWrite = time.Now()
 		if c.ConnEvent != nil {
 			if c.ConnEvent(c) {
 				go c.todo()
@@ -104,12 +122,12 @@ func (c *_UserClient_) Dial() error {
 	return nil
 }
 
-func (c *_UserClient_) todo() {
+func (c *_Client_) todo() {
 	go c.reader()
 	go c.writer()
 }
 
-func (c *_UserClient_) reader() {
+func (c *_Client_) reader() {
 	dataBuff := new(bytes.Buffer)
 	data := make([]byte, 1024)
 	for c.IsRun {
@@ -141,7 +159,7 @@ func (c *_UserClient_) reader() {
 	c.Close()
 }
 
-func (c *_UserClient_) writer() {
+func (c *_Client_) writer() {
 	messages := c.WriteMessages
 	for c.IsRun {
 		if message, ok := <-messages; ok {
