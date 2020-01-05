@@ -11,13 +11,19 @@ import (
 	"time"
 )
 
+// 测试
 func TestTcp(t *testing.T) {
+	// 初始化服务
 	initServer()
+	// 初始化客户端
 	client := initClient()
+	// 通信
 	go sendMsg(client)
+	// 阻塞程序关闭
 	<-make(chan struct{})
 }
 
+// 客户端发送消息
 func sendMsg(client core.UserClient) {
 	// 一个3秒发送一个空请求
 	emptyDataTime := time.NewTicker(time.Second * 3)
@@ -38,6 +44,7 @@ func sendMsg(client core.UserClient) {
 	}
 }
 
+// 初始化客户端
 func initClient() core.UserClient {
 	client := client.New(
 		// 服务连接地址
@@ -62,6 +69,7 @@ func initClient() core.UserClient {
 	return client
 }
 
+// 初始化服务器
 func initServer() {
 	server.New(
 		// 服务监听地址
@@ -103,6 +111,7 @@ func MyServerMessage(message core.Message) {
 	}
 }
 
+// 消息编码
 func MyEncode(message core.Message) []byte {
 	buff := new(bytes.Buffer)
 	var data []byte
@@ -118,6 +127,7 @@ func MyEncode(message core.Message) []byte {
 	return buff.Bytes()
 }
 
+// 消息解码
 func MyDecode(who interface{}, data []byte) (int, core.Message) {
 	if len(data) >= 4 {
 		allLen := binary.BigEndian.Uint32(data[:4])
